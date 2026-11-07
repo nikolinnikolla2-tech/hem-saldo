@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /families/{familyId} {
+      function signedInVerified() {
+        return request.auth != null && request.auth.token.email_verified == true && request.auth.token.email is string;
+      }
+      function member() {
+        return signedInVerified() && request.auth.token.email.lower() in resource.data.memberEmails;
+      }
+      allow create: if signedInVerified() && request.auth.uid == familyId
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberEmails == [request.auth.token.email.lower()];
+      allow read: if member();
+      allow update: if member() && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.memberEmails is list
+        && (request.resource.data.memberEmails == resource.data.memberEmails
+            || (request.auth.uid == resource.data.ownerUid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberEmails','updatedAt'])));
+      allow delete: if false;
+    }
+  }
+}
